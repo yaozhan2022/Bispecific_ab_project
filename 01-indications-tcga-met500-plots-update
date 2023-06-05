@@ -1,0 +1,196 @@
+---
+title: "01-indications-tcga-met500-plots-update"
+author: "Yao"
+date: "11/30/2022"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(pheatmap)
+library(takcodex)
+library(tidyr)
+library(tibble)
+```
+
+<!-- Read data for target genes,Update to use TCGA B38 GC33 -->
+
+```{r, eval=FALSE}
+dbconnection <- get_athena_conn(credentials = set_credentials(), profile_name = "insight")
+tcga <- list_tables(database = "lands_tcga_b38_gc33", connection = dbconnection)
+
+tmp <- takcodex::get_expression_from_athena(
+                                  gene_ids = c('LAIR1','HLA-G','LILRB1','LILRB2','VSIG4','MARCO','CD163','CCR2','STAB1','CSF1R','TREM1','TREM2','SELPLG','LILRB4','CD40'), 
+                                  sample_ids = NULL,
+                                  land_name = "lands_tcga_b38_gc33",
+                                  connection = dbconnection)
+tmp_anno <- get_metadata_from_athena(land_name = "lands_tcga_b38_gc33",limit = NULL,connection = dbconnection)
+
+tmp <- tmp %>% left_join(.,tmp_anno[,c('sampleid','diseasestate','oncosampletype','disease_tcga')])
+```
+
+
+```{r eval=FALSE}
+aws.signature::use_credentials("omicsoft")
+aws.s3::s3saveRDS(x = tmp, object = "s3://takeda.genomics.research/private/Cell_Therapy/Yao/Bispecific_ab/targets_tcga_b38_gc33.rds")
+```
+
+```{r}
+aws.signature::use_credentials("omicsoft")
+targets_b38_gc33 <- aws.s3::s3readRDS(object = "s3://takeda.genomics.research/private/Cell_Therapy/Yao/Bispecific_ab/targets_tcga_b38_gc33.rds")
+```
+
+Stacked barplot
+
+```{r fig.height=8, fig.width=8}
+genes <- c('LAIR1','HLA-G','LILRB1','LILRB2','VSIG4','MARCO','CD163','CCR2','STAB1','CSF1R','TREM1','TREM2','SELPLG','LILRB4','CD40')
+
+for (gene in genes) {
+  print(targets_b38_gc33 %>% filter(genename %in% gene) %>%
+  #filter(oncosampletype == "Primary Tumor" ) %>%
+  ggplot(aes(y = reorder(disease_tcga, fpkm, FUN = median), x = log10(0.1 + fpkm))) +
+  geom_boxplot(outlier.alpha = .2,outlier.size = .5) + 
+  theme_bw() + #theme(axis.text.y = element_text(size = 6))+
+  xlab("log10(0.1 + FPKM)") +
+  ylab("TCGA indication") + 
+  ggtitle(paste(gene,"expression in TCGA Tumor indications")))
+}
+
+
+```
+
+<!-- Horizontal heatmap -->
+
+<!-- x <- as.matrix(targets_b38_gc33 %>% -->
+<!--                  filter(oncosampletype == "Primary Tumor" ) %>% -->
+<!--                  group_by(disease_tcga) %>% -->
+<!--                  summarize(m = median(log10(0.1 + fpkm))) %>% -->
+<!--                  arrange(-m) %>% -->
+<!--                  tibble::column_to_rownames(var = "disease_tcga")) -->
+
+<!-- y <- as.matrix(targets_b38_gc33 %>% -->
+<!--                  filter(oncosampletype == "Primary Tumor" ) %>% -->
+<!--                  group_by(disease_tcga) %>% -->
+<!--                  summarize(VSIG4 = median(VSIG4_FPKM)) %>% -->
+<!--                  arrange(-VSIG4) %>% -->
+<!--                  tibble::column_to_rownames(var = "tumor_type")) -->
+
+
+<!-- {r fig.width=15, fig.height=2} -->
+<!-- pheatmap(t(x), -->
+<!--          cluster_rows = F, -->
+<!--          cluster_cols = F, -->
+<!--          show_rownames = F, -->
+<!--          angle_col = 45, -->
+<!--          main = "Median log10(0.1 + VSIG4 FPKM) in TCGA Primary Tumor", -->
+<!--          display_numbers = T) -->
+
+<!-- pheatmap(t(y), -->
+<!--          cluster_rows = F, -->
+<!--          cluster_cols = F, -->
+<!--          show_rownames = F, -->
+<!--          angle_col = 45, -->
+<!--          main = "Median VSIG4 FPKM in TCGA Primary Tumor", -->
+<!--          display_numbers = T) -->
+
+
+Heatmaps of expression of all targets
+
+```{r}
+expression <- targets_b38_gc33 %>% select(genename,fpkm,sampleid,disease_tcga) %>%
+  pivot_wider(names_from = genename, values_from = fpkm) 
+
+logfpkm_matrix <- as.matrix(expression %>% 
+  mutate_at(vars(all_of(genes)), function(x) log10(x+0.1)) %>%
+  select(2:17) %>%
+  pivot_longer(cols = -disease_tcga, names_to = "gene", values_to = "log10_fpkm") %>%
+  group_by(disease_tcga, gene) %>%
+  summarize(median_log10_fpkm = median(log10_fpkm)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = "gene", values_from = "median_log10_fpkm") %>% 
+  arrange(desc(LAIR1)) %>%
+  relocate(all_of(genes), .after = disease_tcga) %>%
+  column_to_rownames(var = "disease_tcga"))
+```
+
+```{r fig.height=7, fig.width=13}
+pheatmap(mat = logfpkm_matrix,
+         cluster_rows = FALSE,
+         angle_col = 0,
+         main = "Target median expression in TCGA tumors")
+```
+
+2. metastatic tumor databases
+
+``` {r}
+dbconnection <- get_athena_conn(credentials = set_credentials(), profile_name = "insight")
+met500 <- list_tables(database = "lands_met500_b38_gc33", connection = dbconnection)
+
+tmp <- takcodex::get_expression_from_athena(
+                                  gene_ids = c('LAIR1','HLA-G','LILRB1','LILRB2','VSIG4','MARCO','CD163','CCR2','STAB1','CSF1R','TREM1','TREM2','SELPLG','LILRB4','CD40'), 
+                                  sample_ids = NULL,
+                                  land_name = "lands_met500_b38_gc33",
+                                  connection = dbconnection)
+tmp_anno <- get_metadata_from_athena(land_name = "lands_met500_b38_gc33",limit = NULL,connection = dbconnection)
+
+tmp <- tmp %>% left_join(.,tmp_anno[,c('sampleid','oncosampletype')])
+
+aws.signature::use_credentials("omicsoft")
+aws.s3::s3saveRDS(x = tmp, object = "s3://takeda.genomics.research/private/Cell_Therapy/Yao/Bispecific_ab/targets_met500_b38_gc33.rds")
+
+aws.signature::use_credentials("omicsoft")
+targets_met500_b38_gc33 <- aws.s3::s3readRDS(object = "s3://takeda.genomics.research/private/Cell_Therapy/Yao/Bispecific_ab/targets_met500_b38_gc33.rds")
+```
+
+Stacked barplot
+
+```{r fig.height=8, fig.width=8}
+genes <- c('LAIR1','HLA-G','LILRB1','LILRB2','VSIG4','MARCO','CD163','CCR2','STAB1','CSF1R','TREM1','TREM2','SELPLG','LILRB4','CD40')
+
+for (gene in genes) {
+  print(targets_met500_b38_gc33 %>% filter(genename %in% gene) %>%
+  #filter(oncosampletype == "Primary Tumor" ) %>%
+  ggplot(aes(y = reorder(oncosampletype, fpkm, FUN = median), x = log10(0.1 + fpkm))) +
+  geom_boxplot(outlier.alpha = .2,outlier.size = .5) + 
+  theme_bw() + #theme(axis.text.y = element_text(size = 6))+
+  xlab("log10(0.1 + FPKM)") +
+  ylab("MET500 indication") + 
+  ggtitle(paste(gene,"expression in MET500 Tumor indications")))
+}
+```
+
+Heatmaps of expression of all targets
+
+```{r fig.height=7, fig.width=13}
+expression <- targets_met500_b38_gc33 %>% select(genename,fpkm,sampleid,oncosampletype) %>%
+  pivot_wider(names_from = genename, values_from = fpkm) 
+
+logfpkm_matrix <- as.matrix(expression %>% 
+  mutate_at(vars(all_of(genes)), function(x) log10(x+0.1)) %>%
+  select(2:17) %>%
+  pivot_longer(cols = -oncosampletype, names_to = "gene", values_to = "log10_fpkm") %>%
+  group_by(oncosampletype, gene) %>%
+  summarize(median_log10_fpkm = median(log10_fpkm)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = "gene", values_from = "median_log10_fpkm") %>% 
+  arrange(desc(LAIR1)) %>%
+  relocate(all_of(genes), .after = oncosampletype) %>%
+  column_to_rownames(var = "oncosampletype"))
+
+pheatmap(mat = logfpkm_matrix,
+         cluster_rows = FALSE,
+         angle_col = 0,
+         main = "Target median expression in MET500 tumors")
+```
+
+
+
+
+
+
+
+
+
