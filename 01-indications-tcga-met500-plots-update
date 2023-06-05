@@ -16,8 +16,6 @@ library(tidyr)
 library(tibble)
 ```
 
-<!-- Read data for target genes,Update to use TCGA B38 GC33 -->
-
 ```{r, eval=FALSE}
 dbconnection <- get_athena_conn(credentials = set_credentials(), profile_name = "insight")
 tcga <- list_tables(database = "lands_tcga_b38_gc33", connection = dbconnection)
@@ -61,41 +59,6 @@ for (gene in genes) {
 
 
 ```
-
-<!-- Horizontal heatmap -->
-
-<!-- x <- as.matrix(targets_b38_gc33 %>% -->
-<!--                  filter(oncosampletype == "Primary Tumor" ) %>% -->
-<!--                  group_by(disease_tcga) %>% -->
-<!--                  summarize(m = median(log10(0.1 + fpkm))) %>% -->
-<!--                  arrange(-m) %>% -->
-<!--                  tibble::column_to_rownames(var = "disease_tcga")) -->
-
-<!-- y <- as.matrix(targets_b38_gc33 %>% -->
-<!--                  filter(oncosampletype == "Primary Tumor" ) %>% -->
-<!--                  group_by(disease_tcga) %>% -->
-<!--                  summarize(VSIG4 = median(VSIG4_FPKM)) %>% -->
-<!--                  arrange(-VSIG4) %>% -->
-<!--                  tibble::column_to_rownames(var = "tumor_type")) -->
-
-
-<!-- {r fig.width=15, fig.height=2} -->
-<!-- pheatmap(t(x), -->
-<!--          cluster_rows = F, -->
-<!--          cluster_cols = F, -->
-<!--          show_rownames = F, -->
-<!--          angle_col = 45, -->
-<!--          main = "Median log10(0.1 + VSIG4 FPKM) in TCGA Primary Tumor", -->
-<!--          display_numbers = T) -->
-
-<!-- pheatmap(t(y), -->
-<!--          cluster_rows = F, -->
-<!--          cluster_cols = F, -->
-<!--          show_rownames = F, -->
-<!--          angle_col = 45, -->
-<!--          main = "Median VSIG4 FPKM in TCGA Primary Tumor", -->
-<!--          display_numbers = T) -->
-
 
 Heatmaps of expression of all targets
 
